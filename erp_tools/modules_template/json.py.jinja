@@ -1,0 +1,39 @@
+# ============================================= Start Noted JSON ===================================
+# Author : PT. Dapur Perangkat Lunak Indonesia | KoffieSoft Group | https://www.koffiesoft.com/ | info@koffiesoft.com
+# 1. Response return wajib JSON/dict supaya bisa diolah kembali di router
+# 2. Dibuat otomatis oleh `erp module new` dari table `{{ table }}`
+# ============================================= END Noted JSON ===================================
+from sqlalchemy.orm import Session
+from core.modules.{{ module_path }}.model.{{ fitur }}_model import {{ Fitur }}Model
+from core.shared.json_helpers.json_global import json_data_timestamp{{ ", json_format_date" if needs_datetime else "" }}
+import logging
+
+
+async def json_{{ fitur }}(db: Session, {{ fitur }}_data_row: {{ Fitur }}Model, timestamp_data: bool = False) -> dict:
+    try:
+        return_{{ fitur }} = {
+            "{{ pk }}": {{ fitur }}_data_row.{{ pk }},
+{% for c in data_columns %}
+{% set v = fitur ~ "_data_row." ~ c.attr %}
+{% if c.py == "date" %}
+            "{{ c.name }}": json_format_date({{ v }}, "%Y-%m-%d"),
+{% elif c.py == "datetime" %}
+            "{{ c.name }}": json_format_date({{ v }}),
+{% elif c.py == "time" %}
+            "{{ c.name }}": json_format_date({{ v }}, "%H:%M:%S"),
+{% elif c.py == "Decimal" %}
+            "{{ c.name }}": float({{ v }}) if {{ v }} is not None else None,
+{% else %}
+            "{{ c.name }}": {{ v }},
+{% endif %}
+{% endfor %}
+            # Tambahkan properti lain dari {{ fitur }}_data_row sesuai kebutuhan
+        }
+        if timestamp_data:
+            return_{{ fitur }}["timestamp_data"] = await json_data_timestamp(db=db, data_row={{ fitur }}_data_row)
+
+        return return_{{ fitur }}
+    except Exception as e:
+        db.rollback()
+        logging.error(f"Exception json_{{ fitur }}: {e}")
+        return {}

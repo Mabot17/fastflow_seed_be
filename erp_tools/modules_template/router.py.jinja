@@ -1,0 +1,247 @@
+# ============================================= Start Noted Router ===================================
+# Author : PT. Dapur Perangkat Lunak Indonesia | KoffieSoft Group | https://www.koffiesoft.com/ | info@koffiesoft.com
+# 1. router{{ Fitur }} = APIRouter, didaftarkan lewat core/router/modules_registry/{{ domain }}_routers.py & api_router.py
+# 2. identity: TokenData = Depends(get_current_user) -> endpoint wajib memakai token
+# 3. get_all_{{ fitur }} (router) & get_crud_daftar_{{ fitur }} (crud) dibedakan supaya mudah ditelusuri
+# 4. Setiap JSONResponse wajib status_code=result['status']['code'] (HTTP status = body status)
+# 5. Dibuat otomatis oleh `erp module new` dari table `{{ table }}`
+# ============================================= END Noted Router ===================================
+from fastapi import (
+    APIRouter,
+    Depends,
+    status,
+    Path,
+    Query,
+    Request,
+)
+from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
+from database import get_db
+from core.modules.{{ module_path }}.crud.{{ fitur }}_crud import (
+    get_crud_daftar_{{ fitur }},
+    select_{{ fitur }}_by_id,
+    create_data_{{ fitur }},
+    update_data_{{ fitur }},
+    partial_update_data_{{ fitur }},
+    delete_data_{{ fitur }}
+)
+from core.modules.{{ module_path }}.crud.{{ fitur }}_check import (
+    check_{{ fitur }},
+{% if unique_column %}
+    check_{{ fitur }}_{{ unique_suffix }},
+{% endif %}
+)
+from core.modules.{{ module_path }}.schema.{{ fitur }}_schema import (
+    {{ Fitur }}RequestListSchema,
+    {{ Fitur }}ListSchema,
+    {{ Fitur }}ReqSchema,
+    {{ Fitur }}PutSchema,
+    {{ Fitur }}PatchSchema,
+    {{ Fitur }}SingleSchema
+)
+from core.utils.oauth2 import get_current_user
+from core.utils.token import TokenData
+from core.utils.response_handle import (
+    show_success_list,
+    show_success,
+    show_not_found,
+    show_bad_response,
+{% if unique_column %}
+    show_bad_request,
+{% endif %}
+    get_example_responses
+)
+import logging
+
+# START CODE ROUTE {{ fitur_title }}
+router{{ Fitur }} = APIRouter(tags=["{{ tag }}"], prefix="{{ url_prefix }}")
+
+example_responses = get_example_responses(status_codes=[401, 404, 405, 422, 500])
+
+{% set catatan %}
+        **Catatan:**
+
+{% for c in data_columns %}
+        `{{ c.name }}`: {{ c.doc }} \n
+{% endfor %}
+{% endset %}
+
+# ROUTE LIST & SEARCH DATA {{ fitur_title }}
+@router{{ Fitur }}.get("", response_model={{ Fitur }}ListSchema, responses=example_responses)
+async def get_all_{{ fitur }}(
+    http_request: Request,
+    request: {{ Fitur }}RequestListSchema = Depends({{ Fitur }}RequestListSchema.as_form),
+    identity: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        daftar = await get_crud_daftar_{{ fitur }}(db=db, request=request)
+
+        if daftar.get('total_data'):
+            result = await show_success_list(
+                http_request=http_request,
+                data=daftar.get('data'),
+                total_data=daftar.get('total_data'),
+                page=request.page,
+                results_per_page=request.results_per_page,
+                is_paging=True,
+            )
+        else:
+            result = await show_not_found(http_request=http_request, status_code=404)
+
+        return JSONResponse(content=result, status_code=result['status']['code'])
+    except Exception as e:
+        logging.error(f"Exception list_{{ fitur }}: {e}")
+        result = show_bad_response(error=str(e), http_request=http_request)
+        return JSONResponse(content=result, status_code=result['status']['code'])
+
+
+# ROUTE GET DATA {{ fitur_title }} BY ID
+@router{{ Fitur }}.get("{{ pk_path }}", response_model={{ Fitur }}SingleSchema, responses=example_responses)
+async def get_{{ fitur }}(
+    http_request: Request,
+    timestamp_data: bool = Query(False, description="Jika true, JSON akan disertakan detail timestamp."),
+    {{ pk }}: int = Path(..., description="ID dari API GET `{{ api_prefix }}{{ url_prefix }}` (get_all_{{ fitur }}) -> key `{{ pk }}` "),
+    db: Session = Depends(get_db),
+    identity: TokenData = Depends(get_current_user),
+):
+    try:
+        data_{{ fitur }} = await select_{{ fitur }}_by_id(db, {{ pk }}={{ pk }}, timestamp_data=timestamp_data)
+        if not data_{{ fitur }}:
+            result = await show_not_found(http_request=http_request, status_code=404)
+        else:
+            result = await show_success(data=data_{{ fitur }}, http_request=http_request, status_code=status.HTTP_200_OK)
+
+        return JSONResponse(content=result, status_code=result['status']['code'])
+    except Exception as e:
+        logging.error(f"Exception single_list_{{ fitur }}: {e}")
+        result = show_bad_response(error=str(e), http_request=http_request)
+        return JSONResponse(content=result, status_code=result['status']['code'])
+
+
+# ROUTE CREATE DATA {{ fitur_title }}
+@router{{ Fitur }}.post("", response_model={{ Fitur }}SingleSchema, responses=example_responses)
+async def create_{{ fitur }}(
+    http_request: Request,
+    request: {{ Fitur }}ReqSchema,
+    db: Session = Depends(get_db),
+    identity: TokenData = Depends(get_current_user),
+):
+    """
+{{ catatan }}
+    """
+    try:
+{% if unique_column %}
+        if request.{{ unique_column }} is not None:
+            {{ fitur }}_check = await check_{{ fitur }}_{{ unique_suffix }}(db, {{ unique_column }}=request.{{ unique_column }})
+            if {{ fitur }}_check:
+                result = await show_bad_request(http_request=http_request, error=f"{{ unique_title }} {request.{{ unique_column }}} Sudah terdaftar sebelumnya", status_code=status.HTTP_400_BAD_REQUEST)
+                return JSONResponse(content=result, status_code=result['status']['code'])
+
+{% endif %}
+        new_{{ fitur }} = await create_data_{{ fitur }}(db=db, {{ fitur }}_data_create=request, identity=identity)
+        if new_{{ fitur }}:
+            result = await show_success(data=new_{{ fitur }}, http_request=http_request, code_message='createTrue', status_code=status.HTTP_201_CREATED)
+        else:
+            result = await show_success(http_request=http_request, code_message='createFalse', status_code=422)
+
+        return JSONResponse(content=result, status_code=result['status']['code'])
+    except Exception as e:
+        logging.error(f"Exception create_{{ fitur }}: {e}")
+        result = show_bad_response(error=str(e), http_request=http_request)
+        return JSONResponse(content=result, status_code=result['status']['code'])
+
+
+# ROUTE UPDATE DATA {{ fitur_title }}
+@router{{ Fitur }}.put("{{ pk_path }}", response_model={{ Fitur }}SingleSchema, responses=example_responses)
+async def update_{{ fitur }}(
+    http_request: Request,
+    request: {{ Fitur }}PutSchema,
+    {{ pk }}: int = Path(..., description="ID dari API GET `{{ api_prefix }}{{ url_prefix }}` (get_all_{{ fitur }}) -> key `{{ pk }}` "),
+    db: Session = Depends(get_db),
+    identity: TokenData = Depends(get_current_user),
+):
+    """
+{{ catatan }}
+    """
+    try:
+{% if unique_column %}
+        if request.{{ unique_column }} is not None:
+            {{ fitur }}_check = await check_{{ fitur }}_{{ unique_suffix }}(db, {{ unique_column }}=request.{{ unique_column }}, exclude_{{ pk }}={{ pk }})
+            if {{ fitur }}_check:
+                result = await show_bad_request(http_request=http_request, error=f"{{ unique_title }} {request.{{ unique_column }}} Sudah terdaftar sebelumnya", status_code=status.HTTP_400_BAD_REQUEST)
+                return JSONResponse(content=result, status_code=result['status']['code'])
+
+{% endif %}
+        check_data_{{ fitur }} = await check_{{ fitur }}(db, {{ pk }}={{ pk }})
+        if not check_data_{{ fitur }}:
+            result = await show_not_found(http_request=http_request, status_code=404)
+        else:
+            data_{{ fitur }} = await update_data_{{ fitur }}(db=db, {{ pk }}={{ pk }}, {{ fitur }}_data_update=request, identity=identity)
+            result = await show_success(data=data_{{ fitur }}, http_request=http_request, status_code=status.HTTP_200_OK)
+
+        return JSONResponse(content=result, status_code=result['status']['code'])
+    except Exception as e:
+        logging.error(f"Exception update_{{ fitur }}: {e}")
+        result = show_bad_response(error=str(e), http_request=http_request)
+        return JSONResponse(content=result, status_code=result['status']['code'])
+
+
+# ROUTE UPDATE PATCH DATA {{ fitur_title }}
+@router{{ Fitur }}.patch("{{ pk_path }}", response_model={{ Fitur }}SingleSchema, responses=example_responses)
+async def partial_update_{{ fitur }}(
+    http_request: Request,
+    request: {{ Fitur }}PatchSchema,
+    {{ pk }}: int = Path(..., description="ID dari API GET `{{ api_prefix }}{{ url_prefix }}` (get_all_{{ fitur }}) -> key `{{ pk }}` "),
+    db: Session = Depends(get_db),
+    identity: TokenData = Depends(get_current_user),
+):
+    """
+{{ catatan }}
+    """
+    try:
+{% if unique_column %}
+        if request.{{ unique_column }} is not None:
+            {{ fitur }}_check = await check_{{ fitur }}_{{ unique_suffix }}(db, {{ unique_column }}=request.{{ unique_column }}, exclude_{{ pk }}={{ pk }})
+            if {{ fitur }}_check:
+                result = await show_bad_request(http_request=http_request, error=f"{{ unique_title }} {request.{{ unique_column }}} Sudah terdaftar sebelumnya", status_code=status.HTTP_400_BAD_REQUEST)
+                return JSONResponse(content=result, status_code=result['status']['code'])
+
+{% endif %}
+        check_data_{{ fitur }} = await check_{{ fitur }}(db, {{ pk }}={{ pk }})
+        if not check_data_{{ fitur }}:
+            result = await show_not_found(http_request=http_request, status_code=404)
+        else:
+            data_{{ fitur }} = await partial_update_data_{{ fitur }}(db=db, {{ pk }}={{ pk }}, {{ fitur }}_data_update=request.model_dump(exclude_unset=True), identity=identity)
+            result = await show_success(data=data_{{ fitur }}, http_request=http_request, status_code=status.HTTP_200_OK)
+
+        return JSONResponse(content=result, status_code=result['status']['code'])
+    except Exception as e:
+        logging.error(f"Exception update_patch_{{ fitur }}: {e}")
+        result = show_bad_response(error=str(e), http_request=http_request)
+        return JSONResponse(content=result, status_code=result['status']['code'])
+
+
+# ROUTE DELETE DATA {{ fitur_title }}
+@router{{ Fitur }}.delete("{{ pk_path }}", response_model={{ Fitur }}SingleSchema, responses=example_responses)
+async def delete_{{ fitur }}(
+    http_request: Request,
+    {{ pk }}: int = Path(..., description="ID dari API GET `{{ api_prefix }}{{ url_prefix }}` (get_all_{{ fitur }}) -> key `{{ pk }}` "),
+    db: Session = Depends(get_db),
+    identity: TokenData = Depends(get_current_user),
+):
+    try:
+        check_data_{{ fitur }} = await check_{{ fitur }}(db, {{ pk }}={{ pk }})
+        if not check_data_{{ fitur }}:
+            result = await show_not_found(http_request=http_request, status_code=404)
+        else:
+            deleted_data_{{ fitur }} = await delete_data_{{ fitur }}(db=db, {{ pk }}={{ pk }}, identity=identity)
+            result = await show_success(data=deleted_data_{{ fitur }}, http_request=http_request, status_code=status.HTTP_200_OK)
+
+        return JSONResponse(content=result, status_code=result['status']['code'])
+    except Exception as e:
+        logging.error(f"Exception delete_{{ fitur }}: {e}")
+        result = show_bad_response(error=str(e), http_request=http_request)
+        return JSONResponse(content=result, status_code=result['status']['code'])
+
+# END CODE ROUTE {{ fitur_title }}

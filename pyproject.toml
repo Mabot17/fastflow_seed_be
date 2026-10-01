@@ -1,0 +1,45 @@
+[project]
+name = "seed_koffie_backend"
+version = "0.0.1"
+description = "Seed / kerangka backend KoffieSoft (FastAPI + SQLAlchemy + MySQL)"
+authors = [
+    { name = "PT Dapur Perangkat Lunak Indonesia", email = "info@koffiesoft.com" }
+]
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "gunicorn>=23.0.0",
+    "sqlalchemy>=2.0.30",
+    "pymysql>=1.1.0",
+    "python-dotenv>=1.0.0",
+    "pydantic[email]>=2.7.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib>=1.7.4",
+    "python-multipart>=0.0.9",
+    "python-socketio (>=5.11.0,<6.0.0)",
+    "apscheduler>=3.10.4",
+    "jinja2 (>=3.1.4,<4.0.0)",
+]
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=8.0.0"
+httpx = ">=0.27.0"
+
+[build-system]
+requires = ["poetry-core>=2.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[project.scripts]
+erp = "erp_tools.cli:main"
+release = "erp_tools.release:main"     # alias, sama dengan `erp release`
+
+[tool.poetry]
+packages = [{ include = "erp_api" }, { include = "erp_tools" }]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["erp_api", "."]
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecated"]
