@@ -1,9 +1,9 @@
 [project]
-name = "seed_koffie_backend"
+name = "fastflow_seed_be"
 version = "0.0.1"
-description = "Seed / kerangka backend KoffieSoft (FastAPI + SQLAlchemy + MySQL)"
+description = "Seed / kerangka backend FastFlow (FastAPI + SQLAlchemy + MySQL)"
 authors = [
-    { name = "PT Dapur Perangkat Lunak Indonesia", email = "info@koffiesoft.com" }
+    { name = "FastFlow" }
 ]
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
@@ -33,13 +33,13 @@ requires = ["poetry-core>=2.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [project.scripts]
-erp = "erp_tools.cli:main"
-release = "erp_tools.release:main"     # alias, sama dengan `erp release`
+fastflow = "fastflow_tools.cli:main"
+release = "fastflow_tools.release:main"     # alias, sama dengan `fastflow release`
 
 [tool.poetry]
-packages = [{ include = "erp_api" }, { include = "erp_tools" }]
+packages = [{ include = "fastflow_api" }, { include = "fastflow_tools" }]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["erp_api", "."]
+pythonpath = ["fastflow_api", "."]
 filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecated"]

@@ -1,0 +1,276 @@
+# ============================================= Start Noted CRUD ===================================
+# Author : FastFlow | https://github.com/Mabot17/fastflow_seed_be
+# 1. Response return wajib JSON/dict supaya bisa diolah kembali di router
+# 2. Dibuat otomatis oleh `fastflow module new` dari table `{{ table }}`
+# ============================================= END Noted CRUD ===================================
+from sqlalchemy.orm import Session, aliased
+from sqlalchemy import and_, func, or_
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from core.modules.{{ module_path }}.model.{{ fitur }}_model import {{ Fitur }}Model
+from core.modules.{{ module_path }}.schema.{{ fitur }}_schema import {{ Fitur }}ReqSchema, {{ Fitur }}PutSchema, {{ Fitur }}RequestListSchema
+from core.modules.{{ module_path }}.crud.{{ fitur }}_check import check_{{ fitur }}
+from core.utils.token import TokenData
+from core.shared.json_helpers.{{ domain }}.json_{{ fitur }} import json_{{ fitur }}
+from core.utils.common import start_from
+from datetime import datetime
+from typing import Dict
+import logging
+
+
+async def get_crud_daftar_{{ fitur }}(db: Session, request: {{ Fitur }}RequestListSchema) -> Dict:
+    try:
+        {{ fitur_camel }}Model = aliased({{ Fitur }}Model, name="{{ fitur_camel }}Model")
+
+        query = db.query({{ fitur_camel }}Model)
+{% if search_columns %}
+        if request.keywords and request.keywords.strip():
+            keywords_lower = request.keywords.lower()
+            query = query.filter(
+                or_(
+{% for col in search_columns %}
+                    func.lower({{ fitur_camel }}Model.{{ col }}).like(f"%{keywords_lower}%"),
+{% endfor %}
+                )
+            )
+{% endif %}
+
+        filter = []
+{% if has_deleted_at %}
+
+        # Filter belum pernah dihapus
+        filter.append(
+            or_(
+                {{ fitur_camel }}Model.deleted_at.is_(None),
+                {{ fitur_camel }}Model.deleted_at == "0000-00-00 00:00:00"
+            )
+        )
+{% endif %}
+{% if has_deleted_by %}
+        filter.append({{ fitur_camel }}Model.deleted_by.is_(None))
+{% endif %}
+{% if aktif_column %}
+
+        # Filter berdasarkan {{ aktif_column.name }}
+        if request.{{ aktif_column.name }} is not None and request.{{ aktif_column.name }} != 'Semua':
+            filter.append({{ fitur_camel }}Model.{{ aktif_column.name }} == request.{{ aktif_column.name }})
+{% endif %}
+
+        # Gabungkan semua filter menggunakan operator AND
+        query = query.filter(and_(*filter))
+
+        count = query.count()
+
+        qr_data = (
+            query.order_by({{ fitur_camel }}Model.{{ pk }}.desc())
+            .limit(request.results_per_page)
+            .offset(start_from(request.page, request.results_per_page))
+            .all()
+        )
+
+        result_data = [
+            await json_{{ fitur }}(db=db, {{ fitur }}_data_row=row, timestamp_data=request.timestamp_data)
+            for row in qr_data
+        ]
+
+        if result_data:
+            return {"data": result_data, "total_data": count}
+        else:
+            return {"data": None, "total_data": 0}
+
+    except IntegrityError as e:
+        logging.error(f"IntegrityError: {e}")
+        return {"data": None, "total_data": 0}
+    except SQLAlchemyError as e:
+        logging.error(f"SQLAlchemyError: {e}")
+        return {"data": None, "total_data": 0}
+    except Exception as e:
+        logging.error(e)
+        return {"data": None, "total_data": 0}
+
+
+async def select_{{ fitur }}_by_id(
+    db: Session,
+    {{ pk }}: int,
+    timestamp_data: bool = False
+) -> Dict:
+    try:
+        result = await check_{{ fitur }}(db, {{ pk }}={{ pk }})
+
+        if result:
+            return await json_{{ fitur }}(
+                db=db,
+                {{ fitur }}_data_row=result,
+                timestamp_data=timestamp_data
+            )
+        else:
+            return None
+    except IntegrityError as e:
+        logging.error(f"IntegrityError: {e}")
+        return None
+    except SQLAlchemyError as e:
+        logging.error(f"SQLAlchemyError: {e}")
+        return None
+    except Exception as e:
+        logging.error(e)
+        return None
+
+
+async def create_data_{{ fitur }}(db: Session, {{ fitur }}_data_create: {{ Fitur }}ReqSchema, identity: TokenData):
+    new_{{ fitur }} = {{ Fitur }}Model()
+    try:
+{% for c in data_columns %}
+        new_{{ fitur }}.{{ c.attr }} = {{ fitur }}_data_create.{{ c.name }}
+{% endfor %}
+{% if has_created %}
+
+        new_{{ fitur }}.created_at = datetime.now()
+        new_{{ fitur }}.created_by = identity.user_name
+{% endif %}
+
+        db.add(new_{{ fitur }})
+        db.commit()
+        db.refresh(new_{{ fitur }})
+
+        return await json_{{ fitur }}(
+            db=db,
+            {{ fitur }}_data_row=new_{{ fitur }}
+        )
+    except IntegrityError as e:
+        db.rollback()
+        logging.error(f"IntegrityError: {e}")
+        return None  # Tangani kesalahan unik di endpoint
+    except SQLAlchemyError as e:
+        db.rollback()
+        logging.error(f"SQLAlchemyError: {e}")
+        return None
+    except Exception as e:
+        db.rollback()
+        logging.error(e)
+        return None
+
+
+async def update_data_{{ fitur }}(db: Session, {{ pk }}: int, {{ fitur }}_data_update: {{ Fitur }}PutSchema, identity: TokenData):
+    try:
+        old_{{ fitur }} = await check_{{ fitur }}(db, {{ pk }}={{ pk }})
+        if old_{{ fitur }}:
+{% for c in data_columns %}
+            old_{{ fitur }}.{{ c.attr }} = {{ fitur }}_data_update.{{ c.name }}
+{% endfor %}
+
+            # Update data flag
+{% if has_revised %}
+            old_{{ fitur }}.revised = (old_{{ fitur }}.revised or 0) + 1
+{% endif %}
+{% if has_updated %}
+            old_{{ fitur }}.updated_by = identity.user_name
+            old_{{ fitur }}.updated_at = datetime.now()
+{% endif %}
+
+            db.commit()
+            db.refresh(old_{{ fitur }})
+
+            return await json_{{ fitur }}(
+                db=db,
+                {{ fitur }}_data_row=old_{{ fitur }}
+            )
+        else:
+            return None
+    except IntegrityError as e:
+        db.rollback()
+        logging.error(f"IntegrityError: {e}")
+        return None  # Tangani kesalahan unik di endpoint
+    except SQLAlchemyError as e:
+        db.rollback()
+        logging.error(f"SQLAlchemyError: {e}")
+        return None
+    except Exception as e:
+        db.rollback()
+        logging.error(e)
+        return None
+
+
+# Update method patch, jadi bisa diupdate salah satu kolom / bbrp kolom saja. tanpa pengecekan required dahulu
+async def partial_update_data_{{ fitur }}(db: Session, {{ pk }}: int, {{ fitur }}_data_update: dict, identity: TokenData):
+    try:
+        old_patch_{{ fitur }} = await check_{{ fitur }}(db, {{ pk }}={{ pk }})
+        if old_patch_{{ fitur }}:
+            # Update fields only if they are present in the provided data
+            for field, value in {{ fitur }}_data_update.items():
+                if hasattr(old_patch_{{ fitur }}, field):
+                    setattr(old_patch_{{ fitur }}, field, value)
+
+            # Update data flag
+{% if has_revised %}
+            old_patch_{{ fitur }}.revised = (old_patch_{{ fitur }}.revised or 0) + 1
+{% endif %}
+{% if has_updated %}
+            old_patch_{{ fitur }}.updated_by = identity.user_name
+            old_patch_{{ fitur }}.updated_at = datetime.now()
+{% endif %}
+
+            db.commit()
+            db.refresh(old_patch_{{ fitur }})
+
+            return await json_{{ fitur }}(
+                db=db,
+                {{ fitur }}_data_row=old_patch_{{ fitur }}
+            )
+        else:
+            return None
+    except IntegrityError as e:
+        db.rollback()
+        logging.error(f"IntegrityError: {e}")
+        return None  # Tangani kesalahan unik di endpoint
+    except SQLAlchemyError as e:
+        db.rollback()
+        logging.error(f"SQLAlchemyError: {e}")
+        return None
+    except Exception as e:
+        db.rollback()
+        logging.error(f"Exception: {e}")
+        return None
+
+
+async def delete_data_{{ fitur }}(db: Session, {{ pk }}: int, identity: TokenData):
+    try:
+        deleted_{{ fitur }} = await check_{{ fitur }}(db, {{ pk }}={{ pk }})
+        if not deleted_{{ fitur }}:
+            return None
+{% if has_deleted_at %}
+
+{% if aktif_column and aktif_column.has_tidak_aktif %}
+        deleted_{{ fitur }}.{{ aktif_column.name }} = 'Tidak Aktif'
+{% endif %}
+{% if has_deleted_by %}
+        deleted_{{ fitur }}.deleted_by = identity.user_name
+{% endif %}
+        deleted_{{ fitur }}.deleted_at = datetime.now()
+
+        db.commit()
+        db.refresh(deleted_{{ fitur }})
+
+        return await json_{{ fitur }}(
+            db=db,
+            {{ fitur }}_data_row=deleted_{{ fitur }}
+        )
+{% else %}
+
+        # Table tidak punya kolom deleted_at -> hapus permanen
+        data_{{ fitur }} = await json_{{ fitur }}(db=db, {{ fitur }}_data_row=deleted_{{ fitur }})
+        db.delete(deleted_{{ fitur }})
+        db.commit()
+
+        return data_{{ fitur }}
+{% endif %}
+    except IntegrityError as e:
+        db.rollback()
+        logging.error(f"IntegrityError: {e}")
+        return None  # Tangani kesalahan unik di endpoint
+    except SQLAlchemyError as e:
+        db.rollback()
+        logging.error(f"SQLAlchemyError: {e}")
+        return None
+    except Exception as e:
+        db.rollback()
+        logging.error(e)
+        return None

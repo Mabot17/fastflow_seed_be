@@ -12,16 +12,16 @@ build/
 
 # Konfigurasi & kredensial (JANGAN di-push)
 .env
-erp_api/core/.env
+fastflow_api/core/.env
 *.pem
 *.key
 *_auth.txt
 service-account*.json
-erp_constant/**/*.json
+fastflow_constant/**/*.json
 
 # File runtime
-erp_statics/*
-!erp_statics/.gitkeep
+fastflow_statics/*
+!fastflow_statics/.gitkeep
 *.log
 *.db
 *.sqlite3

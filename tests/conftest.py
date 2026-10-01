@@ -15,7 +15,7 @@ os.environ["ENABLE_SISTEM_JOB"] = "0"
 os.environ["STATIC_FILES_FOLDER"] = tempfile.mkdtemp(prefix="seed_statics_")
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path[:0] = [str(ROOT / "erp_api"), str(ROOT)]
+sys.path[:0] = [str(ROOT / "fastflow_api"), str(ROOT)]
 
 import pytest
 from fastapi.testclient import TestClient

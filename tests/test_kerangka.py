@@ -5,7 +5,7 @@ from pathlib import Path
 from conftest import ROOT, assert_status_match
 from core.router.api_metadata import VERSI_API
 
-CORE = ROOT / "erp_api" / "core"
+CORE = ROOT / "fastflow_api" / "core"
 
 
 def test_version(client):
@@ -86,7 +86,7 @@ def _milik_modul(p: Path) -> bool:
 def test_kerangka_tidak_bergantung_pada_modul():
     """File kerangka tidak boleh meng-import core.modules.* (supaya seed tetap bersih & bisa dipakai ulang)."""
     kerangka = [p for p in CORE.rglob("*.py") if not _milik_modul(p)]
-    kerangka += [ROOT / "erp_api" / "database.py"]
+    kerangka += [ROOT / "fastflow_api" / "database.py"]
     pelanggaran = [f"{p.relative_to(ROOT)}:{ln} -> {mod}"
                    for p in kerangka for mod, ln in _imports(p) if mod.startswith("core.modules")]
     assert not pelanggaran, "\n".join(pelanggaran)

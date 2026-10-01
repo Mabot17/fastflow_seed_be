@@ -1,0 +1,89 @@
+# ============================================= Start Noted Schema ===================================
+# Author : FastFlow | https://github.com/Mabot17/fastflow_seed_be
+# 1. Dibuat otomatis oleh `fastflow module new` dari table `{{ table }}`
+# ============================================= END Noted Schema ===================================
+{% if needs_datetime %}
+from datetime import date, datetime, time
+{% endif %}
+{% if needs_decimal %}
+from decimal import Decimal
+{% endif %}
+from fastapi import Query
+from pydantic import BaseModel, Field
+from typing import Optional, List, Literal
+from core.shared.base import (
+    PagingSchema,
+    ResponseBaseSchema,
+    ErrorSchema,
+    RequestSchema
+)
+
+
+class {{ Fitur }}BaseDataSchema(BaseModel):
+{% for c in data_columns %}
+    {{ c.name }}: {{ c.annotation }}{% if c.default_repr is not none %} = {{ c.default_repr }}{% endif %}
+
+{% endfor %}
+
+
+class {{ Fitur }}ListSchema(ResponseBaseSchema):
+    data: List[{{ Fitur }}BaseDataSchema]
+    paging: List[PagingSchema]
+    error: ErrorSchema
+    request: RequestSchema
+
+
+class {{ Fitur }}SingleSchema(ResponseBaseSchema):
+    data: {{ Fitur }}BaseDataSchema
+    error: ErrorSchema
+    request: RequestSchema
+
+
+class {{ Fitur }}RequestListSchema(BaseModel):
+    # Inisialisasi obj & set nilai default untuk validasi pydantic
+    keywords: Optional[str] = Field(default=None)
+    page: int = Field(default=1, gt=0)
+    results_per_page: int = Field(default=20, gt=0, le=100)
+{% if aktif_column %}
+    {{ aktif_column.name }}: Optional[Literal[{{ aktif_column.literal_values }}, 'Semua']] = Field(default='Semua')
+{% endif %}
+    timestamp_data: Optional[bool] = Field(default=False)
+
+    # as form = membuat sebuah form untuk dokumentasi
+    @classmethod
+    def as_form(
+        cls,
+        keywords: str = Query(None),
+        page: int = Query(1, gt=0),
+        results_per_page: int = Query(20, gt=0, le=100),
+{% if aktif_column %}
+        {{ aktif_column.name }}: Literal[{{ aktif_column.literal_values }}, 'Semua'] = Query('Semua', description="Status {{ fitur_title }}"),
+{% endif %}
+        timestamp_data: bool = Query(False, description="Jika true, JSON akan disertakan detail timestamp."),
+    ):
+        return cls(
+            keywords=keywords,
+            page=page,
+            results_per_page=results_per_page,
+{% if aktif_column %}
+            {{ aktif_column.name }}={{ aktif_column.name }},
+{% endif %}
+            timestamp_data=timestamp_data,
+        )
+
+
+class {{ Fitur }}ReqSchema({{ Fitur }}BaseDataSchema):
+    # Dipakai untuk POST (create). Field wajib/opsional mengikuti {{ Fitur }}BaseDataSchema
+    pass
+
+
+class {{ Fitur }}PutSchema({{ Fitur }}BaseDataSchema):
+    # Dipakai untuk PUT (update penuh). Field wajib/opsional mengikuti {{ Fitur }}BaseDataSchema
+    pass
+
+
+class {{ Fitur }}PatchSchema({{ Fitur }}BaseDataSchema):
+    # Method patch: semua field opsional, hanya field yang dikirim yang diupdate
+{% for c in data_columns %}
+    {{ c.name }}: {{ c.optional_annotation }} = Field(default=None)
+{% endfor %}
