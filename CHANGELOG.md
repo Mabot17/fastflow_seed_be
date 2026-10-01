@@ -6,3 +6,5 @@
 - fastflow_tools: fastflow module new, fastflow module register, fastflow release
 - Seed database awal: table users + akun admin
 - Test otomatis (pytest) dengan SQLite in-memory
+
+## [0.0.2] - 2026-10-01
