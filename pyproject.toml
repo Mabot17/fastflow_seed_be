@@ -1,6 +1,6 @@
 [project]
 name = "fastflow_seed_be"
-version = "0.0.1"
+version = "0.0.2"
 description = "Seed / kerangka backend FastFlow (FastAPI + SQLAlchemy + MySQL)"
 authors = [
     { name = "FastFlow" }

@@ -6,7 +6,7 @@
 # ============================================= END Noted API Metadata ===================================
 
 TITLE_API = "FastFlow Seed API"
-VERSI_API = "0.0.1"
+VERSI_API = "0.0.2"
 
 TAGS_METADATA_API = [
     {
